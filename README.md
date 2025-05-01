@@ -1,57 +1,103 @@
 # 📊 Layoffs Data SQL Analysis
 
-This project showcases exploratory data analysis (EDA) using SQL on a layoffs dataset. The goal is to understand patterns in global company layoffs based on industry, country, and time period using structured queries.
+This project performs exploratory data analysis (EDA) using SQL on a dataset of tech company layoffs. The analysis covers trends in layoffs by company, industry, country, time period, and funding stage. It also includes ranking and rolling totals.
 
-## 📁 Project Files
+---
 
-- `Exploratory Project (Layoffs).sql` – contains all SQL queries used for analysis
+## 🧰 Tools Used
 
-## 🧰 Tools & Technologies
+- MySQL
+- SQL (CTEs, window functions, aggregates)
+- STR_TO_DATE, DATE_FORMAT, GROUP BY, DENSE_RANK
 
-- MySQL (or any SQL-based RDBMS)
-- SQL aggregate functions
-- Common Table Expressions (CTEs)
-- Window functions
-- Date formatting and manipulation
+---
 
-## 🔍 Key Analytical Areas
-
-- Overview and raw data exploration
-- Maximum layoffs and full-percentage workforce layoffs
-- Total layoffs by:
-  - Company
-  - Industry
-  - Country
-  - Funding stage
-  - Year
-- Monthly trends and rolling total of layoffs
-- Ranking companies with the highest layoffs by year
-
-## 🧠 Key Insights
-
-- Several companies had full (100%) workforce layoffs
-- Tech and startup-related industries show the highest total layoffs
-- Layoffs peaked significantly in 2022 and 2023
-- Certain countries and industries are more impacted than others
-- Rolling totals indicate accelerating layoffs during specific time frames
-
-## 📈 Sample Queries Included
+## 📋 Full SQL Code
 
 ```sql
--- Total layoffs by industry
+-- Exploratory Data Analysis
+SELECT *
+FROM layoffs_staging2;
+
+SELECT MAX(total_laid_off), MAX(percentage_laid_off)
+FROM layoffs_staging2;
+
+SELECT *
+FROM layoffs_staging2
+WHERE percentage_laid_off = 1;
+
+
+-- SUM of Total Laid off by Company
+SELECT company, SUM(total_laid_off)
+FROM layoffs_staging2
+GROUP BY company
+ORDER BY 2 DESC;
+
+
+-- SUM of Total Laid off by Industry
 SELECT industry, SUM(total_laid_off) AS Total_Laid_Off
 FROM layoffs_staging2
 GROUP BY industry
 ORDER BY 2 DESC;
 
--- Rolling monthly total of layoffs
+
+-- SUM of Total Laid off by Country
+SELECT country, SUM(total_laid_off) AS Total_Laid_Off
+FROM layoffs_staging2
+GROUP BY country
+ORDER BY 2 DESC;
+
+
+-- SUM of Total Laid off by Date only
+SELECT YEAR(`date`) AS Year_Only, SUM(total_laid_off) AS Total_Laid_Off
+FROM layoffs_staging2
+GROUP BY YEAR(`date`)
+HAVING Year_Only IS NOT NULL
+ORDER BY 1 DESC;
+
+
+-- SUM of Total Laid off by Stage
+SELECT stage, SUM(total_laid_off) AS Total_Laid_Off
+FROM layoffs_staging2
+GROUP BY stage
+ORDER BY 2 DESC;
+
+
+-- Rolling Total by Date (Monthly)
 WITH rolling_total_cte AS (
   SELECT DATE_FORMAT(STR_TO_DATE(`date`, '%m/%d/%Y'), '%Y-%m') AS Time_Line,
          SUM(total_laid_off) AS Total_Laid_Off
   FROM layoffs_staging2
   GROUP BY Time_Line
+  HAVING Time_Line IS NOT NULL
+  ORDER BY 1 ASC
 )
 SELECT Time_Line, Total_Laid_Off,
-       SUM(Total_Laid_Off) OVER (ORDER BY Time_Line) AS Rolling_Total
+       SUM(Total_Laid_Off) OVER(ORDER BY Time_Line) AS Rolling_Total
 FROM rolling_total_cte;
+
+
+-- Companies Total Layoff by Year
+SELECT company, YEAR(`date`), SUM(total_laid_off)
+FROM layoffs_staging2
+GROUP BY company, YEAR(`date`)
+ORDER BY 3 DESC;
+
+
+-- Ranking of Companies with the Most Layoffs
+WITH Company_Year(company, years, total_laid_off) AS (
+  SELECT company, YEAR(`date`), SUM(total_laid_off)
+  FROM layoffs_staging2
+  GROUP BY company, YEAR(`date`)
+  ORDER BY 3 DESC
+),
+Company_Year_Rank AS (
+  SELECT *,
+         DENSE_RANK() OVER (PARTITION BY years ORDER BY total_laid_off DESC) AS Ranking
+  FROM Company_Year
+  WHERE years IS NOT NULL
+)
+SELECT *
+FROM Company_Year_Rank
+WHERE Ranking <= 5;
 
